@@ -8,7 +8,8 @@ CSaverBase::CSaverBase(void) :
 	m_4xMsaaQuality(0),
 	m_bEnable4xMsaa(true),
 	m_iSaverIndex(0),
-	m_iNumSavers(0)
+	m_iNumSavers(0),
+	m_fMinFrameRefreshTime(1.0f / 60.0f)
 {
 	TCHAR path[_MAX_PATH];
 	TCHAR drive[_MAX_DRIVE];
@@ -340,11 +341,16 @@ void CSaverBase::Tick()
 {
 	if(m_bRunning)
 	{
-		m_Timer.Tick();
-
-		if(!IterateSaver(m_Timer.DeltaTime(), m_Timer.TotalTime()))
+		if (m_Timer.Tick(m_fMinFrameRefreshTime))
 		{
-			PostMessage(m_hMyWindow, WM_DESTROY, 0, 0);
+			if (!IterateSaver(m_Timer.DeltaTime(), m_Timer.TotalTime()))
+			{
+				PostMessage(m_hMyWindow, WM_DESTROY, 0, 0);
+			}
+		}
+		else
+		{
+			::Sleep(0);
 		}
 	}
 	else
@@ -480,6 +486,36 @@ BOOL CSaverBase::OnResize()
 	assert(SUCCEEDED(hr));
 
 	return OnResizeSaver();
+}
+
+// Helper function for frequently-updated buffers
+HRESULT CSaverBase::MapDataIntoBuffer(const void *pData, size_t nSize, ComPtr<ID3D11Resource> pResource, UINT Subresource, D3D11_MAP MapType)
+{
+	if (m_pD3DContext == nullptr || pResource == nullptr)
+	{
+		assert(false);
+		return E_FAIL;
+	}
+
+	HRESULT hr = S_OK;
+
+	D3D11_MAPPED_SUBRESOURCE mapData;
+	hr = m_pD3DContext->Map(pResource.Get(), Subresource, MapType, 0, &mapData);
+	if (SUCCEEDED(hr))
+	{
+		size_t nTarget = mapData.RowPitch * ((mapData.DepthPitch > 0) ? mapData.DepthPitch : 1);
+		if (nTarget >= nSize)
+		{
+			CopyMemory(mapData.pData, pData, nSize);
+		}
+		else
+		{
+			hr = E_FAIL;
+		}
+		m_pD3DContext->Unmap(pResource.Get(), Subresource);
+	}
+
+	return hr;
 }
 
 void CSaverBase::CleanUp()
