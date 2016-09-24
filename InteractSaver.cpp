@@ -442,7 +442,10 @@ BOOL CInteractSaver::ComputeScene(const SPRING_CONFIG *springConfig)
 		m_pD3DContext->CSSetShader(m_pConfigSpringsCS.Get(), NULL, 0);
 
 		// Map the spring configuration info into graphics memory and send it to the shader
-		MapDataIntoBuffer(springConfig, sizeof(SPRING_CONFIG), m_pCBSpringConfig);
+		D3D11_MAPPED_SUBRESOURCE MappedResource;
+		m_pD3DContext->Map(m_pCBSpringConfig.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+		CopyMemory(MappedResource.pData, springConfig, sizeof(SPRING_CONFIG));
+		m_pD3DContext->Unmap(m_pCBSpringConfig.Get(), 0);
 		m_pD3DContext->CSSetConstantBuffers(0, 1, m_pCBSpringConfig.GetAddressOf());
 
 		// Bind the output view of the spring lookup table
@@ -460,7 +463,10 @@ BOOL CInteractSaver::ComputeScene(const SPRING_CONFIG *springConfig)
 	m_pD3DContext->CSSetShader(m_pPhysicsCS.Get(), NULL, 0);
 
 	// Map the frame varables into graphics memory (this sets them up for the render geometry shader as well).
-	MapDataIntoBuffer(&m_varsFrame, sizeof(FRAME_VARIABLES), m_pCBFrameVariables);
+	D3D11_MAPPED_SUBRESOURCE MappedResource;
+	m_pD3DContext->Map(m_pCBFrameVariables.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &MappedResource);
+	CopyMemory(MappedResource.pData, &m_varsFrame, sizeof(FRAME_VARIABLES));
+	m_pD3DContext->Unmap(m_pCBFrameVariables.Get(), 0);
 
 	// Set the constant buffers defining the world physics and the frame variables
 	ID3D11Buffer *CSCBuffers[2] = {m_pCBWorldPhysics.Get(), m_pCBFrameVariables.Get() };
