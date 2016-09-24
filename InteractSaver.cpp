@@ -551,7 +551,7 @@ BOOL CInteractSaver::RenderScene()
 	m_pD3DContext->OMSetBlendState(oldBlendState.Get(), &oldBlendFactor.x, oldSampleMask);
 	m_pD3DContext->OMSetDepthStencilState(oldDepthStencilState.Get(), oldStencilRef);
 
-	HRESULT hr = m_pSwapChain->Present(0, 0);
+	HRESULT hr = m_pSwapChain->Present(1, 0);
 
 	return SUCCEEDED(hr);
 }
