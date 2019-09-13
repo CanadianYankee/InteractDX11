@@ -58,6 +58,7 @@ protected:
 	};
 
 	static const UINT NUM_PATTERNS = 3;
+	static const UINT PATTERN_UNBOUND = 100;
 	struct SPRING_CONFIG
 	{
 		UINT g_iPattern;
@@ -130,4 +131,5 @@ protected:
 	FRAME_VARIABLES m_varsFrame;
 	float m_fLastRandomize;
 	BOOL m_bInitialRandomizeDone;
+	UINT m_iLastPattern;
 };

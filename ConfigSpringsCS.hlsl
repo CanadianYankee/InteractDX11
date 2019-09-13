@@ -18,6 +18,7 @@ void ConfigSpringsCS(uint3 DTid : SV_DispatchThreadID)
 	//   0 - out of range or i == j  (i.e., no force at all)
 	//   1 - repulsive force
 	//   2 - spring force (could be other positive values in the future)
+	//   100 - all particles repel
 
 	uint id1 = DTid.x;
 	uint id2 = DTid.y;
@@ -72,6 +73,12 @@ void ConfigSpringsCS(uint3 DTid : SV_DispatchThreadID)
 			}
 
 			spring = bAttractive ? 2 : 1;
+			break;
+		}
+
+	case 100: // No springs
+		{
+			spring = 1;
 			break;
 		}
 	}
