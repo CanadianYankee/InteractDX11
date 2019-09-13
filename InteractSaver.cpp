@@ -3,7 +3,8 @@
 
 
 CInteractSaver::CInteractSaver(void) :
-	m_bInitialRandomizeDone(FALSE)
+	m_bInitialRandomizeDone(FALSE),
+	m_iLastPattern(PATTERN_UNBOUND)
 {
 	m_bEnable4xMsaa = FALSE;
 
@@ -382,13 +383,16 @@ BOOL CInteractSaver::UpdateScene(float dt, float T, SPRING_CONFIG **pSpringConfi
 	m_varsFrame.g_fElapsedTime = dt;
 	m_varsFrame.g_fGlobalTime = T;
 
-	if(!m_bInitialRandomizeDone || (T - m_fLastRandomize > m_ConfigData.m_fRandomizeInterval))
+	float fRandomizeInterval = m_ConfigData.m_bAlternateUnbound ? 
+		(m_iLastPattern == PATTERN_UNBOUND ? 0.35 : 0.65) * m_ConfigData.m_fRandomizeInterval : 
+		m_ConfigData.m_fRandomizeInterval;
+	if(!m_bInitialRandomizeDone || (T - m_fLastRandomize > fRandomizeInterval))
 	{
 		RandomizeSprings(pSpringConfig);
 		m_fLastRandomize = T;
 		if(!m_bInitialRandomizeDone)
 		{
-			m_fLastRandomize -= m_ConfigData.m_fRandomizeInterval * (float)m_iSaverIndex / (float)m_iNumSavers;
+			m_fLastRandomize -= fRandomizeInterval * (float)m_iSaverIndex / (float)m_iNumSavers;
 			m_bInitialRandomizeDone = TRUE;
 		}
 	}
@@ -400,11 +404,13 @@ void CInteractSaver::RandomizeSprings(SPRING_CONFIG **pSpringConfig)
 {
 	assert(*pSpringConfig == nullptr);
 
+	BOOL bFlyapart = m_ConfigData.m_bAlternateUnbound && (m_iLastPattern != PATTERN_UNBOUND);
 	SPRING_CONFIG *pNewConfig = new SPRING_CONFIG;
 	*pSpringConfig = pNewConfig;
 
 	pNewConfig->g_iParticleCount = m_ConfigData.m_iParticleCount;
-	pNewConfig->g_iPattern = (rand() % (int)NUM_PATTERNS);
+	pNewConfig->g_iPattern = bFlyapart ? PATTERN_UNBOUND : (rand() % (int)NUM_PATTERNS);
+	m_iLastPattern = pNewConfig->g_iPattern;
 
 	switch(pNewConfig->g_iPattern)
 	{

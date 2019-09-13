@@ -19,9 +19,10 @@ void CConfigData::Reload()
 	m_fParticleRadius = 40.0f; //20.0f;
 	m_fSpringLength = 20.0f;
 	m_fSpringConstant = 6.0f; //3.0f;
-	m_bCentralForce = TRUE; //FALSE;
-	m_fFrictionCoeff = 0.002f; // 0.005f;
-	m_fRandomizeInterval = 30.0;
+	m_bCentralForce = TRUE;
+	m_fFrictionCoeff = 0.005f; // 0.005f;
+	m_fRandomizeInterval = 20.0;
+	m_bAlternateUnbound = TRUE;
 }
 
 void CConfigData::Save()

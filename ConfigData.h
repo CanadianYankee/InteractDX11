@@ -17,6 +17,7 @@ public:
 	BOOL	m_bCentralForce;	// Flag enabling attractive central force
 	float	m_fFrictionCoeff;	// Dynamic friction coefficient
 	float	m_fRandomizeInterval;	// Number of seconds between spring reconfigurations
+	BOOL	m_bAlternateUnbound;	// Flag enabling "fly-apart" every other reconfiguration
 
 	// Constants
 	static const UINT m_iBlockSize = 128;	// Number of threads in a physics compute block
