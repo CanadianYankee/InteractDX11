@@ -384,7 +384,7 @@ BOOL CInteractSaver::UpdateScene(float dt, float T, SPRING_CONFIG **pSpringConfi
 	m_varsFrame.g_fGlobalTime = T;
 
 	float fRandomizeInterval = m_ConfigData.m_bAlternateUnbound ? 
-		(m_iLastPattern == PATTERN_UNBOUND ? 0.35 : 0.65) * m_ConfigData.m_fRandomizeInterval : 
+		(m_iLastPattern == PATTERN_UNBOUND ? 0.35f : 0.65f) * m_ConfigData.m_fRandomizeInterval : 
 		m_ConfigData.m_fRandomizeInterval;
 	if(!m_bInitialRandomizeDone || (T - m_fLastRandomize > fRandomizeInterval))
 	{

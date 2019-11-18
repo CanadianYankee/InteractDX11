@@ -108,6 +108,9 @@
     <None Include="null.cur">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="PhysicsVars.hlsli">
+      <Filter>Shader Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="RenderVS.hlsl">

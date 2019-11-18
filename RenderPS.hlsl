@@ -3,23 +3,7 @@
 // Output is texture color/alpha shaded with particle color and faded into the 
 //    distance based on depth into the field of view.
 
-cbuffer cbWorldPhysics : register(b0)
-{
-	float g_fScale;
-	float g_fParticleRadius;
-	float g_fFrictionCoeff;
-	float g_fSpeedLimit;
-
-	float g_fSpringLength;
-	float g_fSpringConstant;
-	float wpfDummy0;
-	float wpfDummy1;
-
-	uint g_iParticleCount;
-	uint g_iNumBlocks;
-	uint g_bCentralForce;
-	uint wpiDummy0;
-};
+#include "PhysicsVars.hlsli"
 
 texture2D g_txParticleDraw;			// Image for each billboarded particle
 

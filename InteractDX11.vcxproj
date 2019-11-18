@@ -144,6 +144,7 @@ copy "$(ProjectDir)particle.dds" "$(OutDir)particle.dds"</Command>
     <Image Include="small.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="PhysicsVars.hlsli" />
     <None Include="null.cur" />
   </ItemGroup>
   <ItemGroup>
