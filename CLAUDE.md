@@ -22,7 +22,7 @@ A Windows screen saver (`.scr`) built with Direct3D 11. Particles connected by s
 
 The mode depends on the executable's extension and the standard screen-saver switches (`CSaverEngine::ParseForOptions` in `SaverEngine.cpp`):
 - `InteractDX11.exe` with no arguments runs in a normal resizable window. This is the easiest way to debug.
-- `.scr /s` is full-screen saver mode. The primary monitor renders and the other monitors get black cover windows (see `CWindowCluster`).
+- `.scr /s` is full-screen saver mode. Every monitor runs its own independent `CInteractSaver`, with its own D3D device on that monitor's adapter (`CWindowCluster::m_bMultiRender`, which is true only in this mode). The savers are ticked one after another in a single loop, so only the last one presents with vsync (`SetSyncInterval`) and the others use `Present(0)`. Otherwise N monitors would run at 1/N of the refresh rate. The `m_iSaverIndex`/`m_iNumSavers` values stagger each monitor's spring re-randomization. The black cover windows (`AddSecondary`) remain as code but aren't used in this mode.
 - `.scr /p <hwnd>` is the preview pane nested inside the Control Panel window. The HWND is parsed as a 64-bit decimal value. The host lives in another process, so `CWindowCluster::Run` checks `IsWindow(hParentWnd)` every frame and quits once the host is gone. Otherwise the process could linger invisibly.
 - `.scr /c[:hwnd]`, or `.scr` with no arguments, opens the config dialog.
 

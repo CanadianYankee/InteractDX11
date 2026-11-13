@@ -20,7 +20,9 @@ CWindowCluster::CWindowCluster(CSaverEngine *pEngine) :
 	m_pParentEngine(pEngine),
 	m_blackBrush(NULL),
 	m_bResizing(false),
-	m_bMultiRender(false)
+	// In full-screen saver mode, run an independent saver on every monitor. Windowed and
+	// preview modes only ever have a single window.
+	m_bMultiRender(pEngine->GetMode() == CSaverEngine::sdmSaverWindow)
 {
 	assert(!s_pTheCluster);
 	s_pTheCluster = this;
@@ -182,7 +184,22 @@ BOOL CWindowCluster::CreateAll()
 		}
 	}
 
-	assert(iSaverIndex == numSavers);
+	assert(!bSuccess || iSaverIndex == numSavers);
+
+	// Savers are ticked one after another in Run(). If each Present waited for vsync, N monitors
+	// would run at 1/N of the refresh rate, so only the last saver ticked waits; it throttles
+	// the whole loop once per frame.
+	CSaverBase *pLastSaver = nullptr;
+	for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
+	{
+		if(iWindow->pSaver)
+		{
+			iWindow->pSaver->SetSyncInterval(0);
+			pLastSaver = iWindow->pSaver;
+		}
+	}
+	if(pLastSaver)
+		pLastSaver->SetSyncInterval(1);
 
 	return bSuccess;
 }

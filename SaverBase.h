@@ -23,6 +23,7 @@ public:
 	void Pause();
 	void Resume();
 	void ResumeResized(int cx, int cy);
+	void SetSyncInterval(UINT uSyncInterval) { m_uSyncInterval = uSyncInterval; }
 	void CleanUp();
 
 protected:
@@ -77,5 +78,6 @@ protected:
 	float m_fAspectRatio;
 	bool m_bRunning;
 	CDrawTimer m_Timer;
+	UINT m_uSyncInterval = 1;	// Present() sync interval; see CWindowCluster::CreateAll
 };
 
