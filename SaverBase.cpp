@@ -347,20 +347,54 @@ HRESULT CSaverBase::LoadBinaryFile(const std::wstring &strPath, std::vector<char
 	return hr;
 }
 
-void CSaverBase::Tick()
+bool CSaverBase::Tick()
 {
-	if(m_bRunning)
-	{
-		m_Timer.Tick();
+	if(!m_bRunning)
+		return false;
 
-		if(!IterateSaver(m_Timer.DeltaTime(), m_Timer.TotalTime()))
-		{
-			PostMessage(m_hMyWindow, WM_DESTROY, 0, 0);
-		}
-	}
-	else
+	if(m_bOccluded)
 	{
+		// Cheaply check whether we've become visible again, without rendering anything.
+		ULONGLONG ullNow = GetTickCount64();
+		if(ullNow < m_ullNextOcclusionTest)
+			return false;
+
+		if(m_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
+		{
+			m_ullNextOcclusionTest = ullNow + OCCLUSION_POLL_MS;
+			return false;
+		}
+
+		// Visible again: restart the clock so the hidden period isn't one giant physics step.
+		m_bOccluded = false;
+		m_Timer.Start();
 	}
+
+	m_Timer.Tick();
+
+	if(!IterateSaver(m_Timer.DeltaTime(), m_Timer.TotalTime()))
+	{
+		PostMessage(m_hMyWindow, WM_DESTROY, 0, 0);
+		return false;
+	}
+
+	return true;
+}
+
+BOOL CSaverBase::PresentFrame()
+{
+	HRESULT hr = m_pSwapChain->Present(m_uSyncInterval, 0);
+
+	if(hr == DXGI_STATUS_OCCLUDED)
+	{
+		// Not a failure: nothing was displayed. Freeze the simulation clock until visible.
+		m_bOccluded = true;
+		m_Timer.Stop();
+		m_ullNextOcclusionTest = GetTickCount64() + OCCLUSION_POLL_MS;
+		return TRUE;
+	}
+
+	return SUCCEEDED(hr);
 }
 
 void CSaverBase::Pause()
@@ -435,7 +469,7 @@ BOOL CSaverBase::OnResize()
 			}
 		}
 
-		if(SUCCEEDED(hr))
+		if(SUCCEEDED(hr) && m_bUseDepthStencil)
 		{
 			// Create the depth/stencil buffer and view.
 			D3D11_TEXTURE2D_DESC depthStencilDesc;
@@ -473,7 +507,7 @@ BOOL CSaverBase::OnResize()
 
 		if(SUCCEEDED(hr))
 		{
-			// Bind the render target view and depth/stencil view to the pipeline.
+			// Bind the render target view and depth/stencil view (null if unused) to the pipeline.
 			m_pD3DContext->OMSetRenderTargets(1, m_pRenderTargetView.GetAddressOf(), m_pDepthStencilView.Get());
 	
 			// Set the viewport transform.

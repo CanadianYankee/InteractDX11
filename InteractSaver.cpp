@@ -7,6 +7,7 @@ CInteractSaver::CInteractSaver(void) :
 	m_iLastPattern(PATTERN_UNBOUND)
 {
 	m_bEnable4xMsaa = FALSE;
+	m_bUseDepthStencil = false;	// Particles are additively blended with depth testing off
 
 	XMMATRIX I = XMMatrixIdentity();
 	XMStoreFloat4x4(&m_matWorld, I);
@@ -507,7 +508,6 @@ BOOL CInteractSaver::RenderScene()
 	float colorBlack[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
 	m_pD3DContext->ClearRenderTargetView(m_pRenderTargetView.Get(), colorBlack);
-	m_pD3DContext->ClearDepthStencilView(m_pDepthStencilView.Get(), D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
 
 	// Cache initial state of drawing context
 	ComPtr<ID3D11BlendState> oldBlendState;
@@ -557,7 +557,5 @@ BOOL CInteractSaver::RenderScene()
 	m_pD3DContext->OMSetBlendState(oldBlendState.Get(), &oldBlendFactor.x, oldSampleMask);
 	m_pD3DContext->OMSetDepthStencilState(oldDepthStencilState.Get(), oldStencilRef);
 
-	HRESULT hr = m_pSwapChain->Present(m_uSyncInterval, 0);
-
-	return SUCCEEDED(hr);
+	return PresentFrame();
 }

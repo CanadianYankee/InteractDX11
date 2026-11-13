@@ -19,7 +19,8 @@ public:
 	virtual ~CSaverBase(void);
 
 	BOOL Initialize(const CWindowCluster::SAVER_WINDOW &myWindow, int iSaverIndex, int iNumSavers);
-	void Tick();
+	bool Tick();	// Returns true if a frame was simulated and presented
+	bool IsActive() const { return m_bRunning && !m_bOccluded; }
 	void Pause();
 	void Resume();
 	void ResumeResized(int cx, int cy);
@@ -46,6 +47,8 @@ protected:
 	};
 	HRESULT LoadShader(ShaderType type, const std::wstring &strFileName, ComPtr<ID3D11ClassLinkage> pClassLinkage, ComPtr<ID3D11DeviceChild> *pShader, VS_INPUTLAYOUTSETUP *pILS = NULL);
 	HRESULT LoadTexture(const std::wstring &strFileName, ComPtr<ID3D11Texture2D> *ppTexture, ComPtr<ID3D11ShaderResourceView> *ppSRVTexture);
+	// Present the back buffer; handles DXGI_STATUS_OCCLUDED. Returns FALSE on a real failure.
+	BOOL PresentFrame();
 
 private:
 	// Internal utility functions
@@ -78,6 +81,17 @@ protected:
 	float m_fAspectRatio;
 	bool m_bRunning;
 	CDrawTimer m_Timer;
-	UINT m_uSyncInterval = 1;	// Present() sync interval; see CWindowCluster::CreateAll
+	UINT m_uSyncInterval = 1;	// Present() sync interval; see CWindowCluster::Run
+
+	// Set false in a derived constructor if the saver never depth-tests (saves a full-screen
+	// buffer and its per-frame clear).
+	bool m_bUseDepthStencil = true;
+
+	// When nothing we present is visible (locked session, display off, window fully covered or
+	// minimized) Present returns DXGI_STATUS_OCCLUDED without waiting for vsync. We then stop
+	// simulating and only re-test visibility every OCCLUSION_POLL_MS.
+	static const ULONGLONG OCCLUSION_POLL_MS = 250;
+	bool m_bOccluded = false;
+	ULONGLONG m_ullNextOcclusionTest = 0;
 };
 

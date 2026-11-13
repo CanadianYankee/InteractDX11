@@ -46,6 +46,17 @@ protected:
 	WindowVector m_vecWindows;
 	BOOL m_bMultiRender;
 
+	void OnDisplayStateChange(DWORD dwState);
+	void OnSessionChange(WPARAM wParam);
+	void OnHiddenChanged(bool bWasHidden);
+	bool IsHidden() const { return m_bDisplaysOff || m_bSessionLocked; }
+
+	static const DWORD IDLE_POLL_MS = 100;	// Max sleep in Run() when nothing is rendering
+	HPOWERNOTIFY m_hPowerNotify = NULL;
+	bool m_bSessionNotify = false;
+	bool m_bDisplaysOff = false;
+	bool m_bSessionLocked = false;
+
 	HBRUSH m_blackBrush;
 	POINT m_ptMouse;
 	bool m_bResizing;

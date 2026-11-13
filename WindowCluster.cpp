@@ -6,6 +6,9 @@
 #include "InteractSaver.h"
 #include "ConfigDialog.h"
 
+#include <wtsapi32.h>
+#pragma comment(lib, "wtsapi32.lib")
+
 #define MAX_LOADSTRING 100
 
 CWindowCluster *CWindowCluster::s_pTheCluster = nullptr;
@@ -186,20 +189,6 @@ BOOL CWindowCluster::CreateAll()
 
 	assert(!bSuccess || iSaverIndex == numSavers);
 
-	// Savers are ticked one after another in Run(). If each Present waited for vsync, N monitors
-	// would run at 1/N of the refresh rate, so only the last saver ticked waits; it throttles
-	// the whole loop once per frame.
-	CSaverBase *pLastSaver = nullptr;
-	for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
-	{
-		if(iWindow->pSaver)
-		{
-			iWindow->pSaver->SetSyncInterval(0);
-			pLastSaver = iWindow->pSaver;
-		}
-	}
-	if(pLastSaver)
-		pLastSaver->SetSyncInterval(1);
 
 	return bSuccess;
 }
@@ -248,7 +237,7 @@ CWindowCluster::WindowIter CWindowCluster::LookupWindow(HWND hWnd)
 
 void CWindowCluster::Run()
 {
-	MSG msg;
+	MSG msg = {};
 	HACCEL hAccelTable;
 
 	for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
@@ -259,6 +248,15 @@ void CWindowCluster::Run()
 	}
 
 	SetActiveWindow(m_vecWindows.front().hWnd);
+
+	// Get told when the displays power off/on so we can stop rendering to dark screens.
+	// Windows sends the current state immediately after registration.
+	m_hPowerNotify = RegisterPowerSettingNotification(m_vecWindows.front().hWnd,
+		&GUID_CONSOLE_DISPLAY_STATE, DEVICE_NOTIFY_WINDOW_HANDLE);
+
+	// Get told when the session locks/unlocks. On the lock screen DXGI reports our window as
+	// occluded only briefly, then lets us keep presenting, so occlusion alone isn't enough.
+	m_bSessionNotify = WTSRegisterSessionNotification(m_vecWindows.front().hWnd, NOTIFY_FOR_THIS_SESSION) != FALSE;
 
 	hAccelTable = LoadAccelerators(m_pParentEngine->GetAppInstance(), MAKEINTRESOURCE(IDC_INTERACTDX11));
 
@@ -273,7 +271,25 @@ void CWindowCluster::Run()
 		}
 		// Otherwise, let the saver do its thing
 		else
-        {	
+        {
+			// Savers are ticked one after another. If every Present waited for vsync, N monitors
+			// would run at 1/N of the refresh rate, so only the last saver that will actually
+			// render this pass waits; it throttles the whole loop once per frame. Chosen per pass
+			// because a saver drops out while paused or occluded.
+			CSaverBase *pVSyncSaver = nullptr;
+			for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
+			{
+				if(iWindow->pSaver)
+				{
+					iWindow->pSaver->SetSyncInterval(0);
+					if(iWindow->pSaver->IsActive())
+						pVSyncSaver = iWindow->pSaver;
+				}
+			}
+			if(pVSyncSaver)
+				pVSyncSaver->SetSyncInterval(1);
+
+			bool bRendered = false;
 			for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
 			{
 				// The preview host lives in another process (the Screen Saver Settings dialog).
@@ -284,18 +300,68 @@ void CWindowCluster::Run()
 					break;
 				}
 
-				if(iWindow->pSaver)
+				if(iWindow->pSaver && iWindow->pSaver->Tick())
 				{
-					iWindow->pSaver->Tick();
+					bRendered = true;
 				}
 			}
-			Sleep(0); // Give other threads a chance to preempt.
+
+			if(!bRendered)
+			{
+				// Nothing to draw (paused, minimized, occluded, or displays off). Sleep until a
+				// message arrives, waking periodically to re-test occlusion and the preview host.
+				MsgWaitForMultipleObjectsEx(0, nullptr, IDLE_POLL_MS, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+			}
 		}
 	}  while(msg.message != WM_QUIT);
 }
 
+// dwState is from GUID_CONSOLE_DISPLAY_STATE: 0 = off, 1 = on, 2 = dimmed (still visible).
+void CWindowCluster::OnDisplayStateChange(DWORD dwState)
+{
+	bool bWasHidden = IsHidden();
+	m_bDisplaysOff = (dwState == 0);
+	OnHiddenChanged(bWasHidden);
+}
+
+void CWindowCluster::OnSessionChange(WPARAM wParam)
+{
+	if(wParam != WTS_SESSION_LOCK && wParam != WTS_SESSION_UNLOCK)
+		return;
+
+	bool bWasHidden = IsHidden();
+	m_bSessionLocked = (wParam == WTS_SESSION_LOCK);
+	OnHiddenChanged(bWasHidden);
+}
+
+// Pause every saver when nobody can see them (displays off or session locked); resume when
+// that ends, except for windows that are minimized or mid-drag (those resume on their own).
+void CWindowCluster::OnHiddenChanged(bool bWasHidden)
+{
+	bool bHidden = IsHidden();
+	if(bHidden == bWasHidden)
+		return;
+
+	for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
+	{
+		if(!iWindow->pSaver)
+			continue;
+
+		if(bHidden)
+			iWindow->pSaver->Pause();
+		else if(!IsIconic(iWindow->hWnd) && !m_bResizing)
+			iWindow->pSaver->Resume();
+	}
+}
+
 void CWindowCluster::DestroyAll()
 {
+	if(m_bSessionNotify && !m_vecWindows.empty())
+	{
+		WTSUnRegisterSessionNotification(m_vecWindows.front().hWnd);
+		m_bSessionNotify = false;
+	}
+
 	if(m_vecWindows.size() > 0)
 	{
 		for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
@@ -311,6 +377,12 @@ void CWindowCluster::DestroyAll()
 		}
 
 		m_vecWindows.clear();
+	}
+
+	if(m_hPowerNotify)
+	{
+		UnregisterPowerSettingNotification(m_hPowerNotify);
+		m_hPowerNotify = NULL;
 	}
 
 	if(m_blackBrush)
@@ -331,6 +403,23 @@ LRESULT CWindowCluster::ClusterWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 
 	LRESULT lRet = 0;
 	bool bHandled = false;
+
+	if(msg == WM_WTSSESSION_CHANGE)
+	{
+		OnSessionChange(wParam);
+		return 0;
+	}
+
+	if(msg == WM_POWERBROADCAST && wParam == PBT_POWERSETTINGCHANGE)
+	{
+		const POWERBROADCAST_SETTING *pSetting = reinterpret_cast<const POWERBROADCAST_SETTING *>(lParam);
+		if(pSetting && IsEqualGUID(pSetting->PowerSetting, GUID_CONSOLE_DISPLAY_STATE) &&
+			pSetting->DataLength >= sizeof(DWORD))
+		{
+			OnDisplayStateChange(*reinterpret_cast<const DWORD *>(pSetting->Data));
+		}
+		return TRUE;
+	}
 
 	if(iWindow->bSaverMode)
 	{
@@ -429,10 +518,14 @@ LRESULT CWindowCluster::ClusterWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 				else if( wParam == SIZE_MAXIMIZED )
 				{
 					iWindow->pSaver->ResumeResized(iWindow->sClientArea.cx, iWindow->sClientArea.cy);
+					if(IsHidden())
+						iWindow->pSaver->Pause();	// Resized while locked or displays off; stay paused
 				}
 				else if(!m_bResizing)
 				{
 					iWindow->pSaver->ResumeResized(iWindow->sClientArea.cx, iWindow->sClientArea.cy);
+					if(IsHidden())
+						iWindow->pSaver->Pause();	// Resized while locked or displays off; stay paused
 				}
 				bHandled = true;
 				break;
@@ -467,6 +560,8 @@ LRESULT CWindowCluster::ClusterWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 				RECT rcClient;	
 				GetClientRect(iWindow->hWnd, &rcClient);
 				iWindow->pSaver->ResumeResized(iWindow->sClientArea.cx, iWindow->sClientArea.cy);
+				if(IsHidden())
+					iWindow->pSaver->Pause();	// Resized while locked or displays off; stay paused
 				bHandled = true;
 				break;
 			}
