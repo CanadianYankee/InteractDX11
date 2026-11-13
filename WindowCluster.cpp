@@ -154,7 +154,7 @@ BOOL CWindowCluster::CreateAll()
 	bool bRegSecondary = false;
 	BOOL bSuccess = true;
 
-	int numSavers = m_bMultiRender ? m_vecWindows.size() : 1;
+	int numSavers = m_bMultiRender ? static_cast<int>(m_vecWindows.size()) : 1;
 	int iSaverIndex = 0;
 	for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end() && bSuccess; ++iWindow)
 	{
@@ -259,6 +259,14 @@ void CWindowCluster::Run()
         {	
 			for(WindowIter iWindow = m_vecWindows.begin(); iWindow != m_vecWindows.end(); ++iWindow)
 			{
+				// The preview host lives in another process (the Screen Saver Settings dialog).
+				// If it goes away without destroying us cleanly, exit rather than linger invisibly.
+				if(iWindow->bNested && !IsWindow(iWindow->hParentWnd))
+				{
+					PostQuitMessage(0);
+					break;
+				}
+
 				if(iWindow->pSaver)
 				{
 					iWindow->pSaver->Tick();
@@ -408,6 +416,21 @@ LRESULT CWindowCluster::ClusterWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 				else if(!m_bResizing)
 				{
 					iWindow->pSaver->ResumeResized(iWindow->sClientArea.cx, iWindow->sClientArea.cy);
+				}
+				bHandled = true;
+				break;
+			}
+
+		case WM_DPICHANGED:
+			{
+				// Windowed mode moved to a monitor with a different scale factor: accept the
+				// suggested window rect. The resulting WM_SIZE resizes the swap chain.
+				if(!iWindow->bSaverMode && !iWindow->bNested)
+				{
+					const RECT *prcNew = reinterpret_cast<const RECT *>(lParam);
+					SetWindowPos(hWnd, NULL, prcNew->left, prcNew->top,
+						prcNew->right - prcNew->left, prcNew->bottom - prcNew->top,
+						SWP_NOZORDER | SWP_NOACTIVATE);
 				}
 				bHandled = true;
 				break;

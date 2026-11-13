@@ -39,8 +39,19 @@ BOOL CSaverBase::Initialize(const CWindowCluster::SAVER_WINDOW &myWindow, int iS
 	m_hMyWindow = myWindow.hWnd;
 	m_iSaverIndex = iSaverIndex;
 	m_iNumSavers = iNumSavers;
-	m_iClientWidth = myWindow.sClientArea.cx;
-	m_iClientHeight = myWindow.sClientArea.cy;
+	// Size the back buffer from the window's actual client area (physical pixels, since the
+	// process is Per-Monitor DPI aware) rather than the requested size, which can differ.
+	RECT rcClient = {};
+	if(GetClientRect(m_hMyWindow, &rcClient) && rcClient.right > rcClient.left && rcClient.bottom > rcClient.top)
+	{
+		m_iClientWidth = rcClient.right - rcClient.left;
+		m_iClientHeight = rcClient.bottom - rcClient.top;
+	}
+	else
+	{
+		m_iClientWidth = max(1L, myWindow.sClientArea.cx);
+		m_iClientHeight = max(1L, myWindow.sClientArea.cy);
+	}
 	m_fAspectRatio = (float)m_iClientWidth/(float)m_iClientHeight;
 	m_bFullScreen = myWindow.bSaverMode;
 

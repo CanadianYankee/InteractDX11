@@ -142,7 +142,9 @@ bool CSaverEngine::ParseOption(LPCTSTR lpCmdLine, TCHAR &tcOpt, HANDLE &hParam) 
 		return true;
 	lpsz++;
 
-	_stscanf_s(lpsz, L"%ld", &hParam);
+	unsigned long long ullParam = 0;
+	if(_stscanf_s(lpsz, _T("%llu"), &ullParam) == 1)
+		hParam = reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(ullParam));
 	
 	return true;
 }
